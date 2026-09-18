@@ -1,14 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Particle Voice Orb</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <canvas id="orbCanvas"></canvas>
-
-    <script src="script.js"></script>
-  </body>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Partikel-KI</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(circle,#0b2840 0,#030711 55%,#000 100%);font-family:system-ui,sans-serif}canvas{display:block;width:100vw;height:100vh;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Partikel-KI — klicken zum Aktivieren"></canvas>
+<script>
+(()=>{
+'use strict';
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+let w,h,dpr,stream,audio,analyser,source,recognition,timer;
+const s={r:145,target:145,vol:0,listening:false,processing:false,speaking:false,t:0,active:false};
+const particles=Array.from({length:280},(_,i)=>({a:Math.random()*Math.PI*2,o:15+Math.random()*130,z:.7+Math.random()*2.8,v:.2+Math.random()*1.1,alpha:.25+Math.random()*.75,i}));
+function resize(){w=innerWidth;h=innerHeight;dpr=Math.min(devicePixelRatio||1,2);canvas.width=w*dpr;canvas.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+function volume(){if(!analyser)return 0;const a=new Uint8Array(analyser.fftSize);analyser.getByteFrequencyData(a);let n=0;for(const x of a)n+=x;return n/a.length/255}
+async function mic(){if(!navigator.mediaDevices?.getUserMedia)return;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});audio=audio||new(window.AudioContext||window.webkitAudioContext)();analyser=audio.createAnalyser();analyser.fftSize=1024;analyser.smoothingTimeConstant=.82;source=audio.createMediaStreamSource(stream);source.connect(analyser)}catch(e){}}
+function say(text){if(!speechSynthesis)return; speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='de-DE';u.rate=.96;u.onstart=()=>{s.speaking=true;s.processing=false;s.listening=false};u.onend=()=>{s.speaking=false;s.listening=true;listen()};speechSynthesis.speak(u)}
+function answer(q){q=q.toLowerCase();if(/hallo|hello/.test(q))return'Hallo! Ich bin hier und höre zu. Wie kann ich dir helfen?';if(/check|prüf|kontroll/.test(q))return'Alles klar, ich prüfe das jetzt für dich.';if(/start|los/.test(q))return'Starten wir direkt. Ich setze die Aktion jetzt in Gang.';if(/wie geht|status/.test(q))return'Der Status ist gut. Die Kugel läuft stabil und wartet auf deinen nächsten Befehl.';if(/stopp|stop|beend|schließ/.test(q))return'Okay, ich beende den aktuellen Prozess und bin wieder bereit.';return'Verstanden. Ich starte jetzt die passende Aktion.'}
+function process(q){s.listening=false;s.processing=true;clearTimeout(timer);timer=setTimeout(()=>say(answer(q)),1300)}
+function listen(){if(!recognition||s.speaking)return;s.listening=true;try{recognition.start()}catch(e){}}
+function setupSpeech(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)return;recognition=new R();recognition.lang='de-DE';recognition.continuous=true;recognition.interimResults=false;recognition.onresult=e=>{const q=[...e.results].map(x=>x[0].transcript).join(' ').trim();if(q)process(q)};recognition.onend=()=>{if(s.listening)listen()};recognition.onerror=()=>{s.listening=false};listen()}
+async function activate(){if(s.active)return;s.active=true;await mic();if(audio?.state==='suspended')await audio.resume();setupSpeech()}
+function particle(x,y,r,a,i){const col=['#8ae9ff','#99a9ff','#d296ff'][i%3];ctx.globalAlpha=a;ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+function draw(ms){const t=ms/1000;ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)*.8);bg.addColorStop(0,'rgba(15,35,60,.55)');bg.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);s.vol+=(volume()-s.vol)*.12;if(s.processing)s.target=88+Math.sin(t*8)*10;else if(s.speaking)s.target=145+Math.sin(t*12)*20+s.vol*80;else if(s.listening)s.target=120+s.vol*180;else s.target=135+Math.sin(t*3)*8;s.r+=(s.target-s.r)*.12;const x=w/2,y=h/2;
+const glow=ctx.createRadialGradient(x,y,s.r*.1,x,y,s.r*2.2);glow.addColorStop(0,'rgba(120,220,255,.75)');glow.addColorStop(.45,'rgba(96,145,255,.42)');glow.addColorStop(1,'transparent');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,s.r*2.2,0,7);ctx.fill();
+const core=ctx.createRadialGradient(x-s.r*.3,y-s.r*.3,0,x,y,s.r);core.addColorStop(0,'#fff');core.addColorStop(.2,'#aaf0ff');core.addColorStop(.55,'#6ec8ff');core.addColorStop(1,'rgba(60,50,130,.2)');ctx.fillStyle=core;ctx.beginPath();ctx.arc(x,y,s.r,0,7);ctx.fill();
+particles.forEach(p=>{const a=p.a+t*(.5+p.v)+p.i*.03,rad=s.processing?s.r*.45+Math.sin(t*2+p.i)*18:s.r*.95+p.o+s.vol*125;particle(x+Math.cos(a)*rad,y+Math.sin(a)*rad*.9,p.z*(1+s.vol*2.5)*(1+.45*Math.sin(t*3+p.i)),p.alpha,p.i)});
+if(s.processing){ctx.strokeStyle='rgba(140,230,255,.85)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,s.r*1.35,-Math.PI/2,-Math.PI/2+Math.PI*(.8+.35*Math.sin(t*2)));ctx.stroke()};requestAnimationFrame(draw)}
+addEventListener('resize',resize);canvas.addEventListener('pointerdown',activate);resize();requestAnimationFrame(draw);
+})();
+</script>
+</body>
 </html>
